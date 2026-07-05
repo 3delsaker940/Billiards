@@ -3,15 +3,46 @@ import { buildCushionCompound } from '../physics/CushionBody.js';
 import { PocketSensor } from '../physics/PocketSensor.js';
 import { AmmoUtils } from '../utils/AmmoUtils.js';
 
-// Standard 9-foot table proportions scaled to meters (playing surface).
 const TABLE_WIDTH = 1.12;
 const TABLE_LENGTH = 2.24;
+
+/**
+ * يحسب تخطيط الريلز مع فجوات عند كل جيب، بحيث تُستخدم نفس الإحداثيات
+ * لبناء الموديل المرئي (خشب) وشكل الفيزياء (كوشن) بدون أي اختلاف بينهم.
+ */
+function computeRailLayout() {
+  const hw = TABLE_WIDTH / 2;
+  const hl = TABLE_LENGTH / 2;
+  const cornerGap = 0.085; // نصف طول الفتحة عند كل جيب زاوية
+  const middleGap = 0.075; // نصف طول الفتحة عند الجيب الأوسط
+
+  const sideSegLen = (hl - cornerGap) - middleGap;
+  const sideSegCenter = (middleGap + (hl - cornerGap)) / 2;
+  const endSegLen = (hw - cornerGap) * 2;
+
+  return {
+    hw, hl, cornerGap, middleGap,
+    // 4 قطع جانبية (قطعتين لكل ريل جانبي، مفصولتين بفتحة الجيب الأوسط)
+    side: [
+      { x: hw,  zCenter:  sideSegCenter, length: sideSegLen },
+      { x: hw,  zCenter: -sideSegCenter, length: sideSegLen },
+      { x: -hw, zCenter:  sideSegCenter, length: sideSegLen },
+      { x: -hw, zCenter: -sideSegCenter, length: sideSegLen },
+    ],
+    // قطعتين طرفيتين (بدون جيب أوسط)
+    end: [
+      { z: hl,  xCenter: 0, length: endSegLen },
+      { z: -hl, xCenter: 0, length: endSegLen },
+    ],
+  };
+}
 
 export class Table {
   constructor(scene, physicsWorld) {
     this.width = TABLE_WIDTH;
     this.length = TABLE_LENGTH;
     this.headStringZ = TABLE_LENGTH / 4;
+    this.layout = computeRailLayout();
 
     this.bounds = {
       minX: -TABLE_WIDTH / 2 + 0.03, maxX: TABLE_WIDTH / 2 - 0.03,
@@ -21,6 +52,7 @@ export class Table {
     this._buildSlate(scene);
     this._buildCloth(scene);
     this._buildRailsVisual(scene);
+    this._buildPocketVisuals(scene);
     this._buildCushionPhysics(physicsWorld);
     this._buildPockets(physicsWorld);
   }
@@ -48,52 +80,126 @@ export class Table {
     const railHeight = 0.05;
     const thickness = 0.06;
 
-    const long1 = new THREE.Mesh(new THREE.BoxGeometry(thickness, railHeight, TABLE_LENGTH + thickness*2), railMat);
-    long1.position.set(TABLE_WIDTH/2 + thickness/2, railHeight/2, 0);
-    const long2 = long1.clone(); long2.position.x = -(TABLE_WIDTH/2 + thickness/2);
+    this.layout.side.forEach((seg) => {
+      const geo = new THREE.BoxGeometry(thickness, railHeight, seg.length);
+      const mesh = new THREE.Mesh(geo, railMat);
+      mesh.position.set(
+        seg.x + (seg.x > 0 ? thickness / 2 : -thickness / 2),
+        railHeight / 2,
+        seg.zCenter
+      );
+      mesh.castShadow = true; mesh.receiveShadow = true;
+      scene.add(mesh);
+    });
 
-    const short1 = new THREE.Mesh(new THREE.BoxGeometry(TABLE_WIDTH + thickness*2, railHeight, thickness), railMat);
-    short1.position.set(0, railHeight/2, TABLE_LENGTH/2 + thickness/2);
-    const short2 = short1.clone(); short2.position.z = -(TABLE_LENGTH/2 + thickness/2);
-
-    [long1, long2, short1, short2].forEach(m => { m.castShadow = true; m.receiveShadow = true; scene.add(m); });
+    this.layout.end.forEach((seg) => {
+      const geo = new THREE.BoxGeometry(seg.length, railHeight, thickness);
+      const mesh = new THREE.Mesh(geo, railMat);
+      mesh.position.set(
+        seg.xCenter,
+        railHeight / 2,
+        seg.z + (seg.z > 0 ? thickness / 2 : -thickness / 2)
+      );
+      mesh.castShadow = true; mesh.receiveShadow = true;
+      scene.add(mesh);
+    });
   }
 
-  _buildCushionPhysics(physicsWorld) {
-    this.cushionShape = buildCushionCompound(TABLE_WIDTH, TABLE_LENGTH, 0.05, 0.028575);
-    const Ammo = physicsWorld.AmmoRef;
-    const transform = new Ammo.btTransform();
-    transform.setIdentity();
-    const motionState = new Ammo.btDefaultMotionState(transform);
-    const rbInfo = new Ammo.btRigidBodyConstructionInfo(0, motionState, this.cushionShape, new Ammo.btVector3(0,0,0));
-    this.cushionBody = new Ammo.btRigidBody(rbInfo);
-AmmoUtils.safeCall(this.cushionBody, 'setRestitution', 0.85);
-AmmoUtils.safeCall(this.cushionBody, 'setFriction', 0.25);
-AmmoUtils.safeCall(this.cushionBody, 'setUserIndex', -1);
-    physicsWorld.world.addRigidBody(this.cushionBody);
-
-    // Static slate bed floor (thin box under playing surface)
-    const bedShape = new Ammo.btBoxShape(new Ammo.btVector3(TABLE_WIDTH/2, 0.01, TABLE_LENGTH/2));
-    const bedTransform = new Ammo.btTransform();
-    bedTransform.setIdentity();
-    bedTransform.setOrigin(new Ammo.btVector3(0, -0.01, 0));
-    const bedMotion = new Ammo.btDefaultMotionState(bedTransform);
-    const bedInfo = new Ammo.btRigidBodyConstructionInfo(0, bedMotion, bedShape, new Ammo.btVector3(0,0,0));
-    const bedBody = new Ammo.btRigidBody(bedInfo);
-    AmmoUtils.safeCall(bedBody, 'setRestitution', 0.1);
-AmmoUtils.safeCall(bedBody, 'setFriction', 0.20);
-AmmoUtils.safeCall(bedBody, 'setUserIndex', -1);
-    physicsWorld.world.addRigidBody(bedBody);
-  }
-
-  _buildPockets(physicsWorld) {
-    const hw = TABLE_WIDTH / 2, hl = TABLE_LENGTH / 2;
+  /** فتحات الجيوب البصرية: دائرة سوداء + أسطوانة عميقة توهم بوجود حفرة حقيقية */
+  _buildPocketVisuals(scene) {
+    const { hw, hl } = this.layout;
     const positions = [
       { x: -hw, z: -hl }, { x: hw, z: -hl },
       { x: -hw, z: 0 },   { x: hw, z: 0 },
       { x: -hw, z: hl },  { x: hw, z: hl },
     ];
-    this.pockets = positions.map(p => new PocketSensor(p));
+    const pocketRadius = 0.06;
+    const holeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+
+    positions.forEach((p) => {
+      // الفتحة المسطحة على مستوى القماش
+      const ringGeo = new THREE.CircleGeometry(pocketRadius, 24);
+      const ring = new THREE.Mesh(ringGeo, holeMat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(p.x, 0.001, p.z);
+      scene.add(ring);
+
+      // "حفرة" عميقة تحت الفتحة عشان يبين فيها عمق حقيقي
+      const holeGeo = new THREE.CylinderGeometry(pocketRadius * 0.9, pocketRadius * 0.7, 0.15, 20, 1, true);
+      const hole = new THREE.Mesh(holeGeo, holeMat);
+      hole.position.set(p.x, -0.08, p.z);
+      scene.add(hole);
+    });
+  }
+
+  _buildCushionPhysics(physicsWorld) {
+    const Ammo = physicsWorld.AmmoRef;
+    this.cushionShape = buildCushionCompound(Ammo, this.layout, 0.028575);
+
+    const transform = new Ammo.btTransform();
+    transform.setIdentity();
+    const motionState = new Ammo.btDefaultMotionState(transform);
+    const rbInfo = new Ammo.btRigidBodyConstructionInfo(0, motionState, this.cushionShape, new Ammo.btVector3(0, 0, 0));
+    this.cushionBody = new Ammo.btRigidBody(rbInfo);
+
+    AmmoUtils.safeCall(this.cushionBody, 'setRestitution', 0.85);
+    AmmoUtils.safeCall(this.cushionBody, 'setFriction', 0.25);
+    AmmoUtils.safeCall(this.cushionBody, 'setUserIndex', -1);
+    physicsWorld.world.addRigidBody(this.cushionBody);
+
+    // أرضية الطاولة الثابتة (تمنع الكرة من السقوط عبر القماش)
+    const bedShape = new Ammo.btBoxShape(new Ammo.btVector3(TABLE_WIDTH / 2, 0.01, TABLE_LENGTH / 2));
+    const bedTransform = new Ammo.btTransform();
+    bedTransform.setIdentity();
+    bedTransform.setOrigin(new Ammo.btVector3(0, -0.01, 0));
+    const bedMotion = new Ammo.btDefaultMotionState(bedTransform);
+    const bedInfo = new Ammo.btRigidBodyConstructionInfo(0, bedMotion, bedShape, new Ammo.btVector3(0, 0, 0));
+    const bedBody = new Ammo.btRigidBody(bedInfo);
+    AmmoUtils.safeCall(bedBody, 'setRestitution', 0.1);
+    AmmoUtils.safeCall(bedBody, 'setFriction', 0.20);
+    AmmoUtils.safeCall(bedBody, 'setUserIndex', -1);
+    physicsWorld.world.addRigidBody(bedBody);
+
+    // ⭐ جدران احتواء عالية وغير مرئية على كامل محيط الطاولة (تمنع الكرة من "الطيران" برا نهائياً)
+    this._buildContainmentWalls(physicsWorld);
+  }
+
+  _buildContainmentWalls(physicsWorld) {
+    const Ammo = physicsWorld.AmmoRef;
+    const hw = TABLE_WIDTH / 2 + 0.08;
+    const hl = TABLE_LENGTH / 2 + 0.08;
+    const wallHeight = 0.4;
+
+    const wallDefs = [
+      { size: [0.02, wallHeight, hl * 2], pos: [hw, wallHeight / 2, 0] },
+      { size: [0.02, wallHeight, hl * 2], pos: [-hw, wallHeight / 2, 0] },
+      { size: [hw * 2, wallHeight, 0.02], pos: [0, wallHeight / 2, hl] },
+      { size: [hw * 2, wallHeight, 0.02], pos: [0, wallHeight / 2, -hl] },
+    ];
+
+    wallDefs.forEach(({ size, pos }) => {
+      const shape = new Ammo.btBoxShape(new Ammo.btVector3(...size));
+      const t = new Ammo.btTransform();
+      t.setIdentity();
+      t.setOrigin(new Ammo.btVector3(...pos));
+      const motion = new Ammo.btDefaultMotionState(t);
+      const info = new Ammo.btRigidBodyConstructionInfo(0, motion, shape, new Ammo.btVector3(0, 0, 0));
+      const body = new Ammo.btRigidBody(info);
+      AmmoUtils.safeCall(body, 'setRestitution', 0.3);
+      AmmoUtils.safeCall(body, 'setFriction', 0.3);
+      AmmoUtils.safeCall(body, 'setUserIndex', -1);
+      physicsWorld.world.addRigidBody(body);
+    });
+  }
+
+  _buildPockets(physicsWorld) {
+    const { hw, hl } = this.layout;
+    const positions = [
+      { x: -hw, z: -hl }, { x: hw, z: -hl },
+      { x: -hw, z: 0 },   { x: hw, z: 0 },
+      { x: -hw, z: hl },  { x: hw, z: hl },
+    ];
+    this.pockets = positions.map((p) => new PocketSensor(p));
   }
 
   isInsideBounds(pos, radius) {

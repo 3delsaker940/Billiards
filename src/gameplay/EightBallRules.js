@@ -65,6 +65,12 @@ export class EightBallRules {
       // else: same player continues (pocketed a legal ball, no foul)
     }
 
+ this.eventBus.emit('shot:evaluated', {
+      pocketed: [...this.shotLog.pocketed],
+      cueScratched: this.shotLog.cueScratched,
+      foul,
+    });
+
     this.resetShotLog();
   }
 

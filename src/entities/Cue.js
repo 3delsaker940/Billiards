@@ -2,36 +2,40 @@ import * as THREE from 'three';
 
 export class Cue {
   constructor(scene) {
-    const shaftGeo = new THREE.CylinderGeometry(0.006, 0.012, 1.45, 16);
+    this.length = 1.45;
+    // تم التعديل هنا: الأعلى سميك (0.012) والأسفل رفيع (0.006)
+    const shaftGeo = new THREE.CylinderGeometry(0.012, 0.006, this.length, 16);
+    shaftGeo.translate(0, this.length / 2, 0); 
     const shaftMat = new THREE.MeshStandardMaterial({ color: 0xd8b98a, roughness: 0.4 });
     this.mesh = new THREE.Mesh(shaftGeo, shaftMat);
-    this.mesh.rotation.x = Math.PI / 2;
     this.mesh.castShadow = true;
-    this.visible = false;
     this.mesh.visible = false;
     scene.add(this.mesh);
 
-    this.pullBackDistance = 0;
     this.maxPullBack = 0.35;
+    this.restGap = 0.015; 
   }
 
-  /** Position cue behind cue ball along aim direction, offset by tip strike point + power pullback */
   updateTransform(cueBallPos, aimDirection, tipOffset, powerNormalized) {
     this.mesh.visible = true;
     const ballRadius = 0.028575;
-    this.pullBackDistance = 0.05 + powerNormalized * this.maxPullBack;
+    const pullBack = 0.02 + powerNormalized * this.maxPullBack;
 
-    const behind = aimDirection.clone().multiplyScalar(-(ballRadius + 0.02 + this.pullBackDistance));
-    const tipLateral = new THREE.Vector3(-aimDirection.z, 0, aimDirection.x).multiplyScalar(tipOffset.x * ballRadius * 0.8);
-    const tipVertical = new THREE.Vector3(0, tipOffset.y * ballRadius * 0.8, 0);
+    const dir = aimDirection.clone().normalize(); 
 
-    const targetPos = cueBallPos.clone().add(behind).add(tipLateral).add(tipVertical);
-    this.mesh.position.copy(targetPos);
-    this.mesh.position.y += 0; 
+    const right = new THREE.Vector3(-dir.z, 0, dir.x);
+    const lateral = right.multiplyScalar(tipOffset.x * ballRadius * 0.7);
+    const vertical = new THREE.Vector3(0, tipOffset.y * ballRadius * 0.7, 0);
 
-    const lookTarget = cueBallPos.clone().add(tipLateral).add(tipVertical);
-    this.mesh.lookAt(lookTarget);
-    this.mesh.rotateX(Math.PI / 2);
+    const tipPoint = cueBallPos.clone()
+      .add(lateral).add(vertical)
+      .addScaledVector(dir, -(ballRadius + this.restGap + pullBack));
+
+    this.mesh.position.copy(tipPoint);
+
+    // توجيه العصا للخلف عكس اتجاه الضربة
+    const up = new THREE.Vector3(0, 1, 0);
+    this.mesh.quaternion.setFromUnitVectors(up, dir.clone().negate());
   }
 
   hide() {

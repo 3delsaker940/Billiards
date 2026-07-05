@@ -19,8 +19,6 @@ import { rackPositions } from './entities/BallRack.js';
 import { GameStateMachine, States } from './gameplay/GameStateMachine.js';
 import { EightBallRules } from './gameplay/EightBallRules.js';
 import { TurnManager } from './gameplay/TurnManager.js';
-import { FoulDetector } from './gameplay/FoulDetector.js';
-import { ShotResolver } from './gameplay/ShotResolver.js';
 import { BallInHandController } from './gameplay/BallInHandController.js';
 
 import { OrbitCameraController } from './controls/OrbitCameraController.js';
@@ -37,26 +35,13 @@ import { SpinIndicatorView } from './ui/SpinIndicatorView.js';
 
 import { AmmoUtils } from './utils/AmmoUtils.js';
 
-// async function boot() {
-  // -------------------------------------------------------------
-  // 1) تحميل Ammo (WASM) — لازم ننتظره قبل أي استخدام فيزيائي
-  // -------------------------------------------------------------
-  // const loadingText = document.getElementById('loading-text');
-  // loadingText.textContent = 'جارِ تحميل محرك الفيزياء...';
-
-  // const AmmoLib = await Ammo();
-  // AmmoUtils.init(AmmoLib);
-
-
 async function boot() {
   const loadingText = document.getElementById('loading-text');
   loadingText.textContent = 'جارِ تحميل محرك الفيزياء...';
 
-
-const AmmoLib = await window.Ammo({
-  locateFile: () => '/ammo/ammo.wasm.wasm'
-});
-
+  const AmmoLib = await window.Ammo({
+    locateFile: () => '/ammo/ammo.wasm.wasm'
+  });
 
   AmmoUtils.init(AmmoLib);
 
@@ -82,15 +67,8 @@ const AmmoLib = await window.Ammo({
   // 3) منطق اللعبة
   // -------------------------------------------------------------
   const turnManager = new TurnManager(eventBus);
-  const foulDetector = new FoulDetector();
-  const shotResolver = new ShotResolver(eventBus, foulDetector, turnManager);
   const rules = new EightBallRules(eventBus, turnManager);
   const fsm = new GameStateMachine(eventBus);
-
-  // ربط الفاول ديتكتور مع أحداث الفيزياء مباشرة
-  eventBus.on('physics:contact', ({ idA, idB, type }) => {
-    foulDetector.recordContact(idA, idB, type);
-  });
 
   // -------------------------------------------------------------
   // 4) الطاولة والكرات
@@ -209,38 +187,31 @@ const AmmoLib = await window.Ammo({
   // -------------------------------------------------------------
   // 10) ربط نتيجة الرمية بالحالة (shot:settled -> resolve -> next state)
   // -------------------------------------------------------------
-  eventBus.on('shot:settled', () => {
-    const playerGroup = rules.playerGroups[turnManager.currentPlayer];
-    const isPlayerOnEightBall = rules.isPlayerOnEightBall(turnManager.currentPlayer);
-    const eightBallPocketed = foulDetector.pocketedBalls.includes(8);
-
-    const result = shotResolver.resolve({ playerGroup, isPlayerOnEightBall, eightBallPocketed });
-
-    // إزالة الكرات المدخلة فعلياً من المشهد
-    result.pocketedBalls.forEach((id) => {
-      const b = balls.find(x => x.id === id);
+  // نستقبل تفاصيل كل رمية من EightBallRules عشان نحدّث المشهد (إخفاء كرات، إلخ)
+  eventBus.on('shot:evaluated', (result) => {
+    result.pocketed.forEach((id) => {
+      const b = balls.find((x) => x.id === id);
       if (b) b.setPocketed();
     });
-
-    if (result.scratched) {
-      // أعد الكرة البيضاء لمنطقة آمنة مؤقتاً؛ اللاعب التالي رح يحطها بايده
+    if (result.cueScratched) {
       cueBall.respawnAt(new THREE.Vector3(0, 0.028575, 0.55), physicsWorld);
     }
-
-    if (result.gameOver) {
-      fsm.transition(States.RESOLVING_SHOT); // مسموح لأنه بالحالة أصلاً
-      eventBus.emit('game:over', result.gameOver);
-      fsm.state = States.GAME_OVER;
-      return;
-    }
-
-    if (!result.continuesTurn) {
-      turnManager.switchTurn();
-    }
-
-    if (result.foul) {
-      eventBus.emit('request:ball-in-hand', { player: turnManager.currentPlayer });
-    } else {
+  });
+  
+  // إذا صارت مخالفة، EightBallRules بيرسل هذا الحدث تلقائياً
+  eventBus.on('request:ball-in-hand', () => {
+    fsm.transition(States.BALL_IN_HAND);
+  });
+  
+  // إذا صار فوز/خسارة
+  eventBus.on('game:over', () => {
+    fsm.transition(States.GAME_OVER);
+  });
+  
+  // هذا الهاندلر بيشتغل بعد EightBallRules (لأنه انسجل بعده بالترتيب) —
+  // إذا الحالة لسا RESOLVING_SHOT (يعني ما صار فاول ولا فوز)، رجّعها AIMING
+  eventBus.on('shot:settled', () => {
+    if (fsm.state === States.RESOLVING_SHOT) {
       fsm.transition(States.AIMING);
     }
   });
@@ -252,6 +223,21 @@ const AmmoLib = await window.Ammo({
     // فيزياء
     physicsWorld.step(deltaTime);
     dispatcher.processCollisions();
+
+    // ⭐ تصفير قسري للسرعة لما تصير صغيرة جداً — يمنع "الحركة الأبدية الوهمية"
+    // ويضمن إن isMoving() ترجع false فعلياً بدل ما تقترب من صفر للأبد
+    const Ammo = physicsWorld.AmmoRef;
+    balls.forEach((ball) => {
+      if (ball.isPocketed) return;
+      const v = ball.body.body.getLinearVelocity();
+      const w = ball.body.body.getAngularVelocity();
+      const speed = Math.hypot(v.x(), v.y(), v.z());
+      const angSpeed = Math.hypot(w.x(), w.y(), w.z());
+      if (speed < 0.02 && angSpeed < 0.05) {
+        ball.body.body.setLinearVelocity(new Ammo.btVector3(0, 0, 0));
+        ball.body.body.setAngularVelocity(new Ammo.btVector3(0, 0, 0));
+      }
+    });
 
     // احتكاك القماش + السبين لكل كرة نشطة
     balls.forEach((ball) => {

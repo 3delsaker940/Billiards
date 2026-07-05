@@ -40,27 +40,30 @@ export class CushionCollisionHandler {
 
 
 
-
-
-// physics/CushionBody.js
-export function buildCushionCompound(tableWidth, tableLength, cushionHeight, ballRadius) {
+/**
+ * يبني شكل الكوشن المركّب (compound) بنفس فجوات الريلز المرئية بالضبط،
+ * حتى تقدر الكرة تدخل فعلياً لمنطقة الجيب بدل ما ترتد عن جدار وهمي.
+ */
+export function buildCushionCompound(Ammo, layout, ballRadius) {
   const compound = new Ammo.btCompoundShape();
-  const noseHeightRatio = 0.635; // WPA spec: cushion nose strikes ball above centerline
+  const noseHeight = ballRadius * 0.635;
+  const thickness = 0.02;
 
-  const segments = [
-    { pos: [0, ballRadius * noseHeightRatio, tableLength/2], size: [tableWidth/2, 0.02, 0.02], angle: 0 },
-    { pos: [0, ballRadius * noseHeightRatio, -tableLength/2], size: [tableWidth/2, 0.02, 0.02], angle: 0 },
-    { pos: [tableWidth/2, ballRadius * noseHeightRatio, 0], size: [0.02, 0.02, tableLength/2], angle: Math.PI/2 },
-    { pos: [-tableWidth/2, ballRadius * noseHeightRatio, 0], size: [0.02, 0.02, tableLength/2], angle: Math.PI/2 },
-    // Pockets create gaps in these segments — split each rail into sub-segments
-    // that stop short of each pocket mouth radius (see PocketSensor.js for jaw geometry).
-  ];
-
-  segments.forEach(seg => {
-    const shape = new Ammo.btBoxShape(new Ammo.btVector3(...seg.size));
+  layout.side.forEach((seg) => {
+    const halfLen = seg.length / 2;
+    const shape = new Ammo.btBoxShape(new Ammo.btVector3(thickness, thickness, halfLen));
     const t = new Ammo.btTransform();
     t.setIdentity();
-    t.setOrigin(new Ammo.btVector3(...seg.pos));
+    t.setOrigin(new Ammo.btVector3(seg.x, noseHeight, seg.zCenter));
+    compound.addChildShape(t, shape);
+  });
+
+  layout.end.forEach((seg) => {
+    const halfLen = seg.length / 2;
+    const shape = new Ammo.btBoxShape(new Ammo.btVector3(halfLen, thickness, thickness));
+    const t = new Ammo.btTransform();
+    t.setIdentity();
+    t.setOrigin(new Ammo.btVector3(seg.xCenter, noseHeight, seg.z));
     compound.addChildShape(t, shape);
   });
 

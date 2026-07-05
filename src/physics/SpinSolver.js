@@ -69,7 +69,7 @@ export class SpinSolver {
     const magnus = new THREE.Vector3().crossVectors(w, v)
       .multiplyScalar(this.magnusCoefficient);
 
-    const currentForce = new (ballBody.body.getTotalForce().constructor)();
+    // const currentForce = new (ballBody.body.getTotalForce().constructor)();
     ballBody.body.applyCentralForce(AmmoUtils.toAmmo(magnus));
 
     // Sliding -> rolling transition: compute contact-point velocity
