@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { BallBody } from '../physics/BallBody.js';
-import { AmmoUtils } from '../utils/AmmoUtils.js';
 
 const BALL_COLORS = {
   0: 0xffffff, 1: 0xf3c11a, 2: 0x1b4fc4, 3: 0xd12b2b, 4: 0x5c2d91,
@@ -60,27 +59,23 @@ export class Ball {
     this.mesh.add(back);
   }
 
-  syncMeshToBody() {
+syncMeshToBody() {
     if (this.isPocketed) return;
-    const transform = this.body.body.getWorldTransform();
-    const origin = transform.getOrigin();
-    const rotation = transform.getRotation();
-    this.mesh.position.set(origin.x(), origin.y(), origin.z());
-    this.mesh.quaternion.set(rotation.x(), rotation.y(), rotation.z(), rotation.w());
+    this.mesh.position.copy(this.body.position);
+    this.mesh.quaternion.copy(this.body.orientation);
   }
 
   setPocketed() {
     this.isPocketed = true;
+    this.body.isPocketed = true;
     this.mesh.visible = false;
   }
 
-  respawnAt(position, physicsWorld) {
+  respawnAt(position) {
     this.isPocketed = false;
+    this.body.isPocketed = false;
+    this.body.rigidBody.isFalling = false;
     this.mesh.visible = true;
-    const t = AmmoUtils.identityTransform(position);
-    this.body.body.setWorldTransform(t);
-    this.body.body.setLinearVelocity(new physicsWorld.AmmoRef.btVector3(0,0,0));
-    this.body.body.setAngularVelocity(new physicsWorld.AmmoRef.btVector3(0,0,0));
-    this.body.body.setCollisionFlags(this.body.body.getCollisionFlags() & ~4);
+    this.body.setPositionInstant(position);
   }
 }

@@ -1,20 +1,15 @@
 import * as THREE from 'three';
-import { buildCushionCompound } from '../physics/CushionBody.js';
+import { buildCushionSegments } from '../physics/CushionBody.js';
 import { PocketSensor } from '../physics/PocketSensor.js';
-import { AmmoUtils } from '../utils/AmmoUtils.js';
 
 const TABLE_WIDTH = 1.12;
 const TABLE_LENGTH = 2.24;
 
-/**
- * يحسب تخطيط الريلز مع فجوات عند كل جيب، بحيث تُستخدم نفس الإحداثيات
- * لبناء الموديل المرئي (خشب) وشكل الفيزياء (كوشن) بدون أي اختلاف بينهم.
- */
 function computeRailLayout() {
   const hw = TABLE_WIDTH / 2;
   const hl = TABLE_LENGTH / 2;
-  const cornerGap = 0.085; // نصف طول الفتحة عند كل جيب زاوية
-  const middleGap = 0.075; // نصف طول الفتحة عند الجيب الأوسط
+  const cornerGap = 0.085;
+  const middleGap = 0.075;
 
   const sideSegLen = (hl - cornerGap) - middleGap;
   const sideSegCenter = (middleGap + (hl - cornerGap)) / 2;
@@ -22,14 +17,12 @@ function computeRailLayout() {
 
   return {
     hw, hl, cornerGap, middleGap,
-    // 4 قطع جانبية (قطعتين لكل ريل جانبي، مفصولتين بفتحة الجيب الأوسط)
     side: [
       { x: hw,  zCenter:  sideSegCenter, length: sideSegLen },
       { x: hw,  zCenter: -sideSegCenter, length: sideSegLen },
       { x: -hw, zCenter:  sideSegCenter, length: sideSegLen },
       { x: -hw, zCenter: -sideSegCenter, length: sideSegLen },
     ],
-    // قطعتين طرفيتين (بدون جيب أوسط)
     end: [
       { z: hl,  xCenter: 0, length: endSegLen },
       { z: -hl, xCenter: 0, length: endSegLen },
@@ -105,7 +98,6 @@ export class Table {
     });
   }
 
-  /** فتحات الجيوب البصرية: دائرة سوداء + أسطوانة عميقة توهم بوجود حفرة حقيقية */
   _buildPocketVisuals(scene) {
     const { hw, hl } = this.layout;
     const positions = [
@@ -117,14 +109,12 @@ export class Table {
     const holeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
 
     positions.forEach((p) => {
-      // الفتحة المسطحة على مستوى القماش
       const ringGeo = new THREE.CircleGeometry(pocketRadius, 24);
       const ring = new THREE.Mesh(ringGeo, holeMat);
       ring.rotation.x = -Math.PI / 2;
       ring.position.set(p.x, 0.001, p.z);
       scene.add(ring);
 
-      // "حفرة" عميقة تحت الفتحة عشان يبين فيها عمق حقيقي
       const holeGeo = new THREE.CylinderGeometry(pocketRadius * 0.9, pocketRadius * 0.7, 0.15, 20, 1, true);
       const hole = new THREE.Mesh(holeGeo, holeMat);
       hole.position.set(p.x, -0.08, p.z);
@@ -132,64 +122,22 @@ export class Table {
     });
   }
 
+  /**
+   * ⭐ فيزياء بحتة بالكامل: نضيف كل حواف الطاولة كقطع مستقيمة (segments)
+   * لمحرك الفيزياء المخصص، بدل أي جسم صلب من مكتبة خارجية.
+   */
   _buildCushionPhysics(physicsWorld) {
-    const Ammo = physicsWorld.AmmoRef;
-    this.cushionShape = buildCushionCompound(Ammo, this.layout, 0.028575);
+    const segments = buildCushionSegments(this.layout);
+    segments.forEach((seg) => physicsWorld.addCushionSegment(seg.a, seg.b));
 
-    const transform = new Ammo.btTransform();
-    transform.setIdentity();
-    const motionState = new Ammo.btDefaultMotionState(transform);
-    const rbInfo = new Ammo.btRigidBodyConstructionInfo(0, motionState, this.cushionShape, new Ammo.btVector3(0, 0, 0));
-    this.cushionBody = new Ammo.btRigidBody(rbInfo);
-
-    AmmoUtils.safeCall(this.cushionBody, 'setRestitution', 0.85);
-    AmmoUtils.safeCall(this.cushionBody, 'setFriction', 0.25);
-    AmmoUtils.safeCall(this.cushionBody, 'setUserIndex', -1);
-    physicsWorld.world.addRigidBody(this.cushionBody);
-
-    // أرضية الطاولة الثابتة (تمنع الكرة من السقوط عبر القماش)
-    const bedShape = new Ammo.btBoxShape(new Ammo.btVector3(TABLE_WIDTH / 2, 0.01, TABLE_LENGTH / 2));
-    const bedTransform = new Ammo.btTransform();
-    bedTransform.setIdentity();
-    bedTransform.setOrigin(new Ammo.btVector3(0, -0.01, 0));
-    const bedMotion = new Ammo.btDefaultMotionState(bedTransform);
-    const bedInfo = new Ammo.btRigidBodyConstructionInfo(0, bedMotion, bedShape, new Ammo.btVector3(0, 0, 0));
-    const bedBody = new Ammo.btRigidBody(bedInfo);
-    AmmoUtils.safeCall(bedBody, 'setRestitution', 0.1);
-    AmmoUtils.safeCall(bedBody, 'setFriction', 0.20);
-    AmmoUtils.safeCall(bedBody, 'setUserIndex', -1);
-    physicsWorld.world.addRigidBody(bedBody);
-
-    // ⭐ جدران احتواء عالية وغير مرئية على كامل محيط الطاولة (تمنع الكرة من "الطيران" برا نهائياً)
-    this._buildContainmentWalls(physicsWorld);
-  }
-
-  _buildContainmentWalls(physicsWorld) {
-    const Ammo = physicsWorld.AmmoRef;
-    const hw = TABLE_WIDTH / 2 + 0.08;
-    const hl = TABLE_LENGTH / 2 + 0.08;
-    const wallHeight = 0.4;
-
-    const wallDefs = [
-      { size: [0.02, wallHeight, hl * 2], pos: [hw, wallHeight / 2, 0] },
-      { size: [0.02, wallHeight, hl * 2], pos: [-hw, wallHeight / 2, 0] },
-      { size: [hw * 2, wallHeight, 0.02], pos: [0, wallHeight / 2, hl] },
-      { size: [hw * 2, wallHeight, 0.02], pos: [0, wallHeight / 2, -hl] },
-    ];
-
-    wallDefs.forEach(({ size, pos }) => {
-      const shape = new Ammo.btBoxShape(new Ammo.btVector3(...size));
-      const t = new Ammo.btTransform();
-      t.setIdentity();
-      t.setOrigin(new Ammo.btVector3(...pos));
-      const motion = new Ammo.btDefaultMotionState(t);
-      const info = new Ammo.btRigidBodyConstructionInfo(0, motion, shape, new Ammo.btVector3(0, 0, 0));
-      const body = new Ammo.btRigidBody(info);
-      AmmoUtils.safeCall(body, 'setRestitution', 0.3);
-      AmmoUtils.safeCall(body, 'setFriction', 0.3);
-      AmmoUtils.safeCall(body, 'setUserIndex', -1);
-      physicsWorld.world.addRigidBody(body);
-    });
+    // شبكة أمان خارجية إضافية (تمنع أي كرة نهائياً من مغادرة الطاولة بأي سرعة)
+    const margin = 0.15;
+    const hw = this.width / 2 + margin;
+    const hl = this.length / 2 + margin;
+    physicsWorld.addCushionSegment(new THREE.Vector3(hw, 0, -hl), new THREE.Vector3(hw, 0, hl));
+    physicsWorld.addCushionSegment(new THREE.Vector3(-hw, 0, -hl), new THREE.Vector3(-hw, 0, hl));
+    physicsWorld.addCushionSegment(new THREE.Vector3(-hw, 0, hl), new THREE.Vector3(hw, 0, hl));
+    physicsWorld.addCushionSegment(new THREE.Vector3(-hw, 0, -hl), new THREE.Vector3(hw, 0, -hl));
   }
 
   _buildPockets(physicsWorld) {
