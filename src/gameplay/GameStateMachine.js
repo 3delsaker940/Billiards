@@ -14,9 +14,9 @@ export class GameStateMachine {
     this.state = States.BREAK;
     this.eventBus = eventBus;
     this.transitions = {
-      [States.BREAK]:            [States.SHOT_IN_PROGRESS],
+      [States.BREAK]:            [States.SHOT_IN_PROGRESS, States.AIMING],
       [States.AIMING]:           [States.POWER_CHARGING, States.AIMING],
-      [States.POWER_CHARGING]:   [States.SHOT_IN_PROGRESS, States.AIMING], // aiming = cancel
+      [States.POWER_CHARGING]:   [States.SHOT_IN_PROGRESS, States.AIMING],
       [States.SHOT_IN_PROGRESS]: [States.RESOLVING_SHOT],
       [States.RESOLVING_SHOT]:   [States.AIMING, States.BALL_IN_HAND, States.GAME_OVER],
       [States.BALL_IN_HAND]:     [States.AIMING],
@@ -34,10 +34,13 @@ export class GameStateMachine {
     return true;
   }
 
-  /** Called every frame while in SHOT_IN_PROGRESS to detect "all balls stopped" */
+  /** ⭐ المصدر الوحيد لإصدار 'shot:settled' — مرة واحدة بالضبط لكل رمية */
   checkSettled(balls) {
     if (this.state !== States.SHOT_IN_PROGRESS) return;
     const allStopped = balls.every(b => !b.body.isMoving());
-    if (allStopped) this.transition(States.RESOLVING_SHOT);
+    if (allStopped) {
+      this.transition(States.RESOLVING_SHOT);
+      this.eventBus.emit('shot:settled'); // ينبعث فقط هون، ولا مكان تاني بالكود
+    }
   }
 }

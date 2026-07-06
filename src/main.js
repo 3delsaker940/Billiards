@@ -188,33 +188,40 @@ async function boot() {
   // 10) ربط نتيجة الرمية بالحالة (shot:settled -> resolve -> next state)
   // -------------------------------------------------------------
   // نستقبل تفاصيل كل رمية من EightBallRules عشان نحدّث المشهد (إخفاء كرات، إلخ)
-  eventBus.on('shot:evaluated', (result) => {
-    result.pocketed.forEach((id) => {
-      const b = balls.find((x) => x.id === id);
-      if (b) b.setPocketed();
-    });
-    if (result.cueScratched) {
-      cueBall.respawnAt(new THREE.Vector3(0, 0.028575, 0.55), physicsWorld);
-    }
-  });
+ 
   
   // إذا صارت مخالفة، EightBallRules بيرسل هذا الحدث تلقائياً
-  eventBus.on('request:ball-in-hand', () => {
-    fsm.transition(States.BALL_IN_HAND);
-  });
+ 
   
   // إذا صار فوز/خسارة
-  eventBus.on('game:over', () => {
-    fsm.transition(States.GAME_OVER);
-  });
+
   
   // هذا الهاندلر بيشتغل بعد EightBallRules (لأنه انسجل بعده بالترتيب) —
   // إذا الحالة لسا RESOLVING_SHOT (يعني ما صار فاول ولا فوز)، رجّعها AIMING
-  eventBus.on('shot:settled', () => {
-    if (fsm.state === States.RESOLVING_SHOT) {
-      fsm.transition(States.AIMING);
-    }
+// المصدر الوحيد للانتقال بعد انتهاء الرمية — يقرأ shot:evaluated فقط
+eventBus.on('shot:evaluated', (result) => {
+  // إخفاء الكرات المُدخلة من المشهد
+  result.pocketed.forEach((id) => {
+    const b = balls.find((x) => x.id === id);
+    if (b) b.setPocketed();
   });
+
+  if (result.cueScratched) {
+    cueBall.respawnAt(new THREE.Vector3(0, 0.028575, 0.55), physicsWorld);
+  }
+
+  if (result.gameOver) {
+    fsm.transition(States.GAME_OVER);
+    return;
+  }
+
+  if (result.requestBallInHand) {
+    fsm.transition(States.BALL_IN_HAND);
+  } else {
+    // ✅ الحالة الطبيعية: لا فاول ولا فوز/خسارة -> ارجع للتصويب
+    fsm.transition(States.AIMING);
+  }
+});
 
   // -------------------------------------------------------------
   // 11) حلقة التحديث الرئيسية

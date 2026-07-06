@@ -35,41 +35,61 @@ export class EightBallRules {
     const currentPlayer = this.turnManager.currentPlayer;
     const foul = this.detectFoul(currentPlayer);
     const legalGroup = this.playerGroups[currentPlayer];
+    const eightPocketed = this.shotLog.pocketed.includes(8);
 
-    // 8-ball early/scratch loss condition
-    if (this.shotLog.pocketed.includes(8)) {
+    let gameOverInfo = null;
+
+    if (eightPocketed) {
       const legallyOnEight = this.isPlayerOnEightBall(currentPlayer);
       if (!legallyOnEight || this.shotLog.cueScratched) {
-        this.eventBus.emit('game:over', { winner: this.turnManager.otherPlayer(currentPlayer), reason: '8-ball foul' });
-        return;
+        gameOverInfo = { winner: this.turnManager.otherPlayer(currentPlayer), reason: '8-ball foul' };
+      } else if (legallyOnEight && !foul) {
+        gameOverInfo = { winner: currentPlayer, reason: '8-ball legally pocketed' };
       }
-      if (legallyOnEight && !foul) {
-        this.eventBus.emit('game:over', { winner: currentPlayer, reason: '8-ball legally pocketed' });
-        return;
-      }
+    }
+
+    if (gameOverInfo) {
+      this.eventBus.emit('game:over', gameOverInfo);
+      // نُصدر shot:evaluated أيضاً هون عشان الكرات المُدخلة (بما فيها السوداء) تختفي من المشهد
+      this.eventBus.emit('shot:evaluated', {
+        pocketed: [...this.shotLog.pocketed],
+        cueScratched: this.shotLog.cueScratched,
+        foul,
+        gameOver: true,
+      });
+      this.resetShotLog();
+      return;
     }
 
     if (!this.groupsAssigned && this.shotLog.pocketed.length > 0 && !foul) {
       this.assignGroups(currentPlayer, this.shotLog.pocketed);
     }
 
+    let ballInHandRequested = false;
+
     if (foul) {
       this.eventBus.emit('foul:committed', { player: currentPlayer, reason: foul });
       this.turnManager.switchTurn();
-      this.eventBus.emit('request:ball-in-hand', { player: this.turnManager.currentPlayer });
+      ballInHandRequested = true;
     } else {
       const pocketedOwnGroup = this.shotLog.pocketed.some(id => this.ballBelongsToGroup(id, legalGroup));
       if (!pocketedOwnGroup || this.shotLog.pocketed.length === 0) {
         this.turnManager.switchTurn();
       }
-      // else: same player continues (pocketed a legal ball, no foul)
     }
 
- this.eventBus.emit('shot:evaluated', {
+    // ⭐ حدث واحد موحّد يحمل كل المعلومات — main.js يقرر عليه الانتقال الصحيح للحالة
+    this.eventBus.emit('shot:evaluated', {
       pocketed: [...this.shotLog.pocketed],
       cueScratched: this.shotLog.cueScratched,
       foul,
+      gameOver: false,
+      requestBallInHand: ballInHandRequested,
     });
+
+    if (ballInHandRequested) {
+      this.eventBus.emit('request:ball-in-hand', { player: this.turnManager.currentPlayer });
+    }
 
     this.resetShotLog();
   }
