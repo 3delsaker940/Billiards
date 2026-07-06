@@ -163,7 +163,7 @@ async function boot() {
       spinIndicatorView.update(spinSelector.tipOffset);
     }
 
-    cameraController.setEnabled(fsm.state !== States.SHOT_IN_PROGRESS);
+    // cameraController.setEnabled(fsm.state !== States.SHOT_IN_PROGRESS);
     powerMeter.update(deltaTime);
     sceneManager.render();
   });
