@@ -96,7 +96,14 @@ async function boot() {
   const raycaster = new THREE.Raycaster();
 
   const aimController = new AimController(sceneManager.scene, cueBall, sceneManager.camera);
-  const powerMeter = new PowerMeter(eventBus);
+  // const powerMeter = new PowerMeter(eventBus);
+
+  const powerMeter = new PowerMeter(eventBus, {
+  minPower: 0.5,
+  maxPower: 12,
+  cycleDuration: 2.4, // 👈 عدّل هاد الرقم لتظبط سرعة الشريط حسب إحساسك
+});
+
   const spinCanvas = document.getElementById('spin-selector-canvas');
   const spinSelector = new SpinSelector(spinCanvas);
 
