@@ -3,7 +3,6 @@ import * as THREE from 'three';
 export class SpinSolver {
   constructor(config = {}) {
     this.magnusCoefficient = config.magnusCoefficient ?? 0.00042;
-    this.spinToRollTransitionSpeed = config.spinToRollTransitionSpeed ?? 0.02;
   }
 
   computeStrikeImpulse(tipOffset, cueDirection, power, ballRadius) {
@@ -17,34 +16,53 @@ export class SpinSolver {
 
     const linearImpulse = forward.clone().multiplyScalar(power);
     const contactPoint = right.clone().multiplyScalar(localX).add(up.clone().multiplyScalar(localY));
-    const forceVec = forward.clone().multiplyScalar(power);
-    const angularImpulse = new THREE.Vector3().crossVectors(contactPoint, forceVec);
+    
+    // العزم هو الجداء التقاطعي بين ذراع القوة (موقع الضربة) ومتجه القوة
+    const angularImpulse = new THREE.Vector3().crossVectors(contactPoint, linearImpulse);
 
     const offsetMagnitude = Math.sqrt(tipOffset.x ** 2 + tipOffset.y ** 2);
     return { linearImpulse, angularImpulse, miscueRisk: offsetMagnitude > 0.85, contactPoint };
   }
 
-  applySpinDynamics(ballBody, deltaTime) {
+  applySpinDynamics(ballBody) {
     const v = ballBody.velocity;
     const w = ballBody.angularVelocity;
     if (v.length() < 0.001) return;
 
+    // تأثير الماغنوس (Swerve/Masse Effect) - انحراف الكرة بسبب الهواء والدوران
+    // F_magnus = C * (w x v)
     const magnus = new THREE.Vector3().crossVectors(w, v).multiplyScalar(this.magnusCoefficient);
     ballBody.applyForce(magnus);
-
-    const contactVelocity = v.clone().add(new THREE.Vector3().crossVectors(w, new THREE.Vector3(0, -ballBody.radius, 0)));
-    if (contactVelocity.length() > this.spinToRollTransitionSpeed) {
-      const frictionDir = contactVelocity.clone().normalize().multiplyScalar(-1);
-      const frictionForce = frictionDir.multiplyScalar(0.18 * ballBody.mass * 9.81);
-      ballBody.applyForce(frictionForce);
-      ballBody.applyTorque(new THREE.Vector3(0, -ballBody.radius, 0).cross(frictionForce));
-    }
+    
+    // تم إزالة كود الاحتكاك من هنا لأنه يُعالج بالكامل في ClothFriction.js
   }
 
-  applyThrowEffect(rigidBodyA, rigidBodyB, contactNormal) {
+  applyThrowEffect(rigidBodyA, rigidBodyB, contactNormal, j) {
+    if (j <= 0) return; // إذا مافي قوة صدمة عمودية، مستحيل يتولد رمي جانبي
+    
     const tangentSpin = rigidBodyA.angularVelocity.clone().projectOnPlane(contactNormal);
     if (tangentSpin.length() < 0.1) return;
-    const throwImpulse = tangentSpin.clone().cross(contactNormal).multiplyScalar(0.008);
+
+    // اتجاه الرمي المماسي
+    const throwDir = tangentSpin.clone().cross(contactNormal).normalize();
+    
+    // الفيزياء الحقيقية: معامل الاحتكاك بين كرات الفينوليك بريسين حوالي 0.05 إلى 0.08
+    const ballToBallFriction = 0.06;
+    
+    // الحد الأقصى الفيزيائي المسموح به لقوة الرمي (قانون نيوتن للاحتكاك: F_max = mu * N)
+    const maxThrowImpulse = j * ballToBallFriction;
+    
+    // القوة المتولدة بناءً على سرعة الدوران، وبشرط ألا تتخطى الحد الأقصى الفيزيائي
+    const throwMagnitude = Math.min(tangentSpin.length() * 0.0005 * j, maxThrowImpulse);
+    const throwImpulse = throwDir.multiplyScalar(throwMagnitude);
+
+    // تطبيق قانون نيوتن الثالث: الفعل ورد الفعل بالسرعة الخطية
     rigidBodyB.applyCentralImpulse(throwImpulse);
+    rigidBodyA.applyCentralImpulse(throwImpulse.clone().negate());
+    
+    // تأثير رد الفعل على سرعة الدوران نفسها (الكرة تفقد جزء من الـ spin بسبب الاحتكاك)
+    const rA = contactNormal.clone().multiplyScalar(rigidBodyA.radius);
+    const torqueA = rA.cross(throwImpulse);
+    rigidBodyA.angularVelocity.addScaledVector(torqueA, -rigidBodyA.invInertia);
   }
 }
