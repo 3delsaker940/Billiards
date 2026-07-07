@@ -67,6 +67,13 @@ export class PhysicsWorld {
     // 4) تحديث الدوران البصري + تثبيت الكرة على مستوى الطاولة
     activeBalls.forEach((b) => {
       const rb = b.rigidBody;
+      
+      // 🟢 الكود المضاف: تصفير السرعة إذا كانت صغيرة جداً لضمان التوقف التام
+      if (rb.velocity.lengthSq() < 0.00005) {
+          rb.velocity.set(0, 0, 0);
+          rb.angularVelocity.set(0, 0, 0);
+      }
+
       const angSpeed = rb.angularVelocity.length();
       if (angSpeed > 1e-8) {
         const axis = rb.angularVelocity.clone().divideScalar(angSpeed);
@@ -76,7 +83,6 @@ export class PhysicsWorld {
       rb.position.y = rb.radius;
       rb.velocity.y = 0;
     });
-
     activeBalls.forEach((b) => b.rigidBody.clearAccumulators());
   }
 
@@ -156,11 +162,3 @@ export class PhysicsWorld {
     }
   }
 }
-
-
-
-
-
-
-
-

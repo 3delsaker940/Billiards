@@ -1,8 +1,9 @@
 import * as THREE from 'three';
+
 export class ClothFriction {
   constructor(config = {}) {
-    this.slidingFrictionCoeff = config.slidingFrictionCoeff ?? 0.18;
-    this.rollingFrictionCoeff = config.rollingFrictionCoeff ?? 0.008;
+    this.slidingFrictionCoeff = config.slidingFrictionCoeff ?? 0.25;
+    this.rollingFrictionCoeff = config.rollingFrictionCoeff ?? 0.018;
     // احتكاك دوراني (pivot/spinning friction) جديد — يخمّد الدوران حول y فقط
     this.spinningFrictionCoeff = config.spinningFrictionCoeff ?? 0.044;
     this.spinDampingThreshold = 1e-4;
