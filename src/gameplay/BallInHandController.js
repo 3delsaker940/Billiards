@@ -1,25 +1,21 @@
-// gameplay/BallInHandController.js
 export class BallInHandController {
-  constructor(cueBallBody, table, raycaster) {
-    this.cueBallBody = cueBallBody;
+  constructor(cueBallEntity, table, raycaster) {
+    this.cueBallEntity = cueBallEntity;
     this.table = table;
     this.raycaster = raycaster;
-    this.dragging = false;
+    this.previewPosition = null;
+    this.isLegal = false;
   }
 
   onPointerMove(ndcPos, camera, otherBalls, restrictedToKitchen = false) {
     this.raycaster.setFromCamera(ndcPos, camera);
     const hit = this.raycaster.intersectObject(this.table.slateMesh)[0];
     if (!hit) return;
-
-    let pos = hit.point;
-    if (restrictedToKitchen && pos.z > this.table.headStringZ) {
-      pos.z = this.table.headStringZ; // clamp to legal kitchen zone after opponent's break foul
-    }
-
-    const legal = this.validatePosition(pos, otherBalls);
+    const pos = hit.point.clone();
+    pos.y = 0.028575;
+    if (restrictedToKitchen && pos.z > this.table.headStringZ) pos.z = this.table.headStringZ;
     this.previewPosition = pos;
-    this.isLegal = legal;
+    this.isLegal = this.validatePosition(pos, otherBalls);
   }
 
   validatePosition(pos, otherBalls) {
@@ -31,13 +27,8 @@ export class BallInHandController {
   }
 
   confirmPlacement() {
-    if (!this.isLegal) return false;
-    const t = new Ammo.btTransform();
-    t.setIdentity();
-    t.setOrigin(new Ammo.btVector3(this.previewPosition.x, 0.028575, this.previewPosition.z));
-    this.cueBallBody.body.setWorldTransform(t);
-    this.cueBallBody.body.setLinearVelocity(new Ammo.btVector3(0,0,0));
-    this.cueBallBody.body.setAngularVelocity(new Ammo.btVector3(0,0,0));
+    if (!this.isLegal || !this.previewPosition) return false;
+    this.cueBallEntity.respawnAt(this.previewPosition);
     return true;
   }
 }
