@@ -63,7 +63,7 @@ async function boot() {
   const inputManager = new InputManager(canvas);
   const raycaster = new THREE.Raycaster();
   const aimController = new AimController(sceneManager.scene, cueBall, sceneManager.camera);
-  const powerMeter = new PowerMeter(eventBus, { minPower: 0.5, maxPower: 12, cycleDuration: 2.4 });
+  const powerMeter = new PowerMeter(eventBus, { minPower: 0.05, maxPower: 0.6, cycleDuration: 2.4 });
   const spinSelector = new SpinSelector(document.getElementById('spin-selector-canvas'));
   const ballInHandController = new BallInHandController(cueBall, table, raycaster);
 

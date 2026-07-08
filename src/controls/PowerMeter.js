@@ -1,8 +1,9 @@
 export class PowerMeter {
   constructor(eventBus, config = {}) {
     this.eventBus = eventBus;
-    this.minPower = config.minPower ?? 0.5;
-    this.maxPower = config.maxPower ?? 12;
+    // default impulse range (reduced for realistic ball speeds)
+    this.minPower = config.minPower ?? 0.05;
+    this.maxPower = config.maxPower ?? 0.6;
 
     // ⭐ مدة الدورة الكاملة بالثواني (0 -> 100% -> 0). كل ما زادت الرقم، صار الشريط أبطأ.
     // 2.4 ثانية = وقت كافي جداً للاعب يلحق يثبّت عند القوة يلي بدو ياها.
