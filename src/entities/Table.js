@@ -1,6 +1,6 @@
-import * as THREE from 'three';
-import { buildCushionSegments } from '../physics/CushionBody.js';
-import { PocketSensor } from '../physics/PocketSensor.js';
+import * as THREE from "three";
+import { buildCushionSegments } from "../physics/CushionBody.js";
+import { PocketSensor } from "../physics/PocketSensor.js";
 
 const TABLE_WIDTH = 1.12;
 const TABLE_LENGTH = 2.24;
@@ -11,20 +11,23 @@ function computeRailLayout() {
   const cornerGap = 0.085;
   const middleGap = 0.075;
 
-  const sideSegLen = (hl - cornerGap) - middleGap;
+  const sideSegLen = hl - cornerGap - middleGap;
   const sideSegCenter = (middleGap + (hl - cornerGap)) / 2;
   const endSegLen = (hw - cornerGap) * 2;
 
   return {
-    hw, hl, cornerGap, middleGap,
+    hw,
+    hl,
+    cornerGap,
+    middleGap,
     side: [
-      { x: hw,  zCenter:  sideSegCenter, length: sideSegLen },
-      { x: hw,  zCenter: -sideSegCenter, length: sideSegLen },
-      { x: -hw, zCenter:  sideSegCenter, length: sideSegLen },
+      { x: hw, zCenter: sideSegCenter, length: sideSegLen },
+      { x: hw, zCenter: -sideSegCenter, length: sideSegLen },
+      { x: -hw, zCenter: sideSegCenter, length: sideSegLen },
       { x: -hw, zCenter: -sideSegCenter, length: sideSegLen },
     ],
     end: [
-      { z: hl,  xCenter: 0, length: endSegLen },
+      { z: hl, xCenter: 0, length: endSegLen },
       { z: -hl, xCenter: 0, length: endSegLen },
     ],
   };
@@ -38,26 +41,26 @@ export class Table {
     this.layout = computeRailLayout();
 
     this.bounds = {
-      minX: -TABLE_WIDTH / 2 + 0.03, maxX: TABLE_WIDTH / 2 - 0.03,
-      minZ: -TABLE_LENGTH / 2 + 0.03, maxZ: TABLE_LENGTH / 2 - 0.03,
+      minX: -TABLE_WIDTH / 2 + 0.03,
+      maxX: TABLE_WIDTH / 2 - 0.03,
+      minZ: -TABLE_LENGTH / 2 + 0.03,
+      maxZ: TABLE_LENGTH / 2 - 0.03,
     };
 
     this._buildSlate(scene);
     this._buildCloth(scene);
     this._buildRailsVisual(scene);
-    this._buildPocketVisuals(scene); // تم تغيير منطق الحفر بالكامل هنا
+    this._buildPocketVisuals(scene);
     this._buildCushionPhysics(physicsWorld);
     this._buildPockets(physicsWorld);
   }
 
   _buildSlate(scene) {
-    // 1. حساب أبعاد الرخام/الخشب
     const hw = (this.width + 0.4) / 2;
     const hl = (this.length + 0.4) / 2;
     const { hw: tableHw, hl: tableHl } = this.layout;
     const pocketRadius = 0.065;
 
-    // 2. رسم مسطح الرخام الأساسي باستخدام مسار (Shape)
     const shape = new THREE.Shape();
     shape.moveTo(-hw, -hl);
     shape.lineTo(hw, -hl);
@@ -65,73 +68,72 @@ export class Table {
     shape.lineTo(-hw, hl);
     shape.lineTo(-hw, -hl);
 
-    // 3. تفريغ الجيوب الـ 6 من طبقة الرخام (عشان الطابة تقدر تنزل لتحت براحتها)
-    // ملاحظة: الـ Shape بيتعامل مع X و Y (يلي رح تصير Z بعد التدوير)
     const pockets = [
-      { x: -tableHw, y: tableHl },  { x: tableHw, y: tableHl },
-      { x: -tableHw, y: 0 },        { x: tableHw, y: 0 },
-      { x: -tableHw, y: -tableHl }, { x: tableHw, y: -tableHl },
+      { x: -tableHw, y: tableHl },
+      { x: tableHw, y: tableHl },
+      { x: -tableHw, y: 0 },
+      { x: tableHw, y: 0 },
+      { x: -tableHw, y: -tableHl },
+      { x: tableHw, y: -tableHl },
     ];
 
-    pockets.forEach(p => {
+    pockets.forEach((p) => {
       const hole = new THREE.Path();
-      // كبّرنا الحفرة بالرخام شعرة صغيرة مشان ما يبين أي حواف خشب جوا الجيب
       hole.absarc(p.x, p.y, pocketRadius + 0.005, 0, Math.PI * 2, false);
       shape.holes.push(hole);
     });
 
-    // 4. إعطاء الرخام سماكة واقعية (Extrude) 
-    const extrudeSettings = { depth: 0.12, bevelEnabled: false, curveSegments: 24 };
+    const extrudeSettings = {
+      depth: 0.12,
+      bevelEnabled: false,
+      curveSegments: 24,
+    };
     const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-    const mat = new THREE.MeshStandardMaterial({ color: 0x15100c, roughness: 0.9 });
-    
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x15100c,
+      roughness: 0.9,
+    });
+
     this.slateMesh = new THREE.Mesh(geo, mat);
-    this.slateMesh.rotation.x = -Math.PI / 2; // تدوير ليصير أفقي
-    // بعد التدوير الـ depth بيطلع لفوق، فننزله لتحت القماش مباشرة
-    this.slateMesh.position.y = -0.13; 
+    this.slateMesh.rotation.x = -Math.PI / 2;
+    this.slateMesh.position.y = -0.13;
     this.slateMesh.receiveShadow = true;
     scene.add(this.slateMesh);
   }
 
-
   _buildCloth(scene) {
     const hw = 1.12 / 2;
     const hl = 2.24 / 2;
-    const pR = 0.06; // نصف قطر الحفرة
-    
-    // المادة
-    const clothMat = new THREE.MeshStandardMaterial({ 
-        color: 0x004d26, 
-        side: THREE.DoubleSide,
-        roughness: 0.9 
+    const pR = 0.06;
+
+    const clothMat = new THREE.MeshStandardMaterial({
+      color: 0x004d26,
+      side: THREE.DoubleSide,
+      roughness: 0.9,
     });
 
-    // سنقوم ببناء القماش من 3 شرائح مستطيلة (بدون أي ثقوب معقدة)
-    // الشريحة الوسطى والمستطيلات الجانبية
     const createStrip = (w, l, x, z) => {
-        const geo = new THREE.PlaneGeometry(w, l);
-        const mesh = new THREE.Mesh(geo, clothMat);
-        mesh.rotation.x = -Math.PI / 2;
-        mesh.position.set(x, 0.005, z);
-        mesh.receiveShadow = true;
-        scene.add(mesh);
+      const geo = new THREE.PlaneGeometry(w, l);
+      const mesh = new THREE.Mesh(geo, clothMat);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.set(x, 0.005, z);
+      mesh.receiveShadow = true;
+      scene.add(mesh);
     };
 
-    // هذا التوزيع يغطي الطاولة بالكامل ويترك فراغات الحفر بشكل تلقائي
-    const gap = 0.12; // عرض الفراغ بين القطع
+    const gap = 0.12;
     const stripWidth = (hw * 2 - gap * 2) / 3;
 
-    // الشرائح الثلاث الطولية
-    createStrip(stripWidth, hl * 2, -hw + stripWidth/2 + gap, 0);
+    createStrip(stripWidth, hl * 2, -hw + stripWidth / 2 + gap, 0);
     createStrip(stripWidth, hl * 2, 0, 0);
-    createStrip(stripWidth, hl * 2, hw - stripWidth/2 - gap, 0);
-
-    // ملاحظة: بما أننا نستخدم نظام المربعات، تأكد أن فتحات الطاولة (المجوفة) 
-    // تحت هذا القماش تكون أكبر قليلاً لتظهر بوضوح
-}
+    createStrip(stripWidth, hl * 2, hw - stripWidth / 2 - gap, 0);
+  }
 
   _buildRailsVisual(scene) {
-    const cushionMat = new THREE.MeshStandardMaterial({ color: 0x0d361f, roughness: 0.8 }); 
+    const cushionMat = new THREE.MeshStandardMaterial({
+      color: 0x0d361f,
+      roughness: 0.8,
+    });
     const railHeight = 0.05;
     const thickness = 0.06;
 
@@ -141,9 +143,10 @@ export class Table {
       mesh.position.set(
         seg.x + (seg.x > 0 ? thickness / 2 : -thickness / 2),
         railHeight / 2,
-        seg.zCenter
+        seg.zCenter,
       );
-      mesh.castShadow = true; mesh.receiveShadow = true;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
       scene.add(mesh);
     });
 
@@ -153,67 +156,124 @@ export class Table {
       mesh.position.set(
         seg.xCenter,
         railHeight / 2,
-        seg.z + (seg.z > 0 ? thickness / 2 : -thickness / 2)
+        seg.z + (seg.z > 0 ? thickness / 2 : -thickness / 2),
       );
-      mesh.castShadow = true; mesh.receiveShadow = true;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
       scene.add(mesh);
     });
 
-    // الإطار الخشبي الداكن
-    const frameMat = new THREE.MeshStandardMaterial({ 
-      color: 0x1d1410, 
+    const frameMat = new THREE.MeshStandardMaterial({
+      color: 0x1d1410,
       roughness: 0.35,
-      metalness: 0.05
+      metalness: 0.05,
     });
-    const frameThickness = 0.12; 
-    const frameHeight = 0.055; // أعلى من الوسائد بمليمترات بسيطة ليعطي واقعية
-    
-    const totalWidth = this.width + (thickness * 2);
-    const totalLength = this.length + (thickness * 2);
+    const frameThickness = 0.12;
+    const frameHeight = 0.055;
 
-    const sideFrameGeo = new THREE.BoxGeometry(frameThickness, frameHeight, totalLength + frameThickness * 2);
+    const totalWidth = this.width + thickness * 2;
+    const totalLength = this.length + thickness * 2;
+
+    const sideFrameGeo = new THREE.BoxGeometry(
+      frameThickness,
+      frameHeight,
+      totalLength + frameThickness * 2,
+    );
     const rightFrame = new THREE.Mesh(sideFrameGeo, frameMat);
-    rightFrame.position.set(totalWidth / 2 + frameThickness / 2, frameHeight / 2, 0);
-    rightFrame.castShadow = true; rightFrame.receiveShadow = true;
+    rightFrame.position.set(
+      totalWidth / 2 + frameThickness / 2,
+      frameHeight / 2,
+      0,
+    );
+    rightFrame.castShadow = true;
+    rightFrame.receiveShadow = true;
     scene.add(rightFrame);
 
     const leftFrame = new THREE.Mesh(sideFrameGeo, frameMat);
-    leftFrame.position.set(-totalWidth / 2 - frameThickness / 2, frameHeight / 2, 0);
-    leftFrame.castShadow = true; leftFrame.receiveShadow = true;
+    leftFrame.position.set(
+      -totalWidth / 2 - frameThickness / 2,
+      frameHeight / 2,
+      0,
+    );
+    leftFrame.castShadow = true;
+    leftFrame.receiveShadow = true;
     scene.add(leftFrame);
 
-    const endFrameGeo = new THREE.BoxGeometry(totalWidth, frameHeight, frameThickness);
+    const endFrameGeo = new THREE.BoxGeometry(
+      totalWidth,
+      frameHeight,
+      frameThickness,
+    );
     const topFrame = new THREE.Mesh(endFrameGeo, frameMat);
-    topFrame.position.set(0, frameHeight / 2, totalLength / 2 + frameThickness / 2);
-    topFrame.castShadow = true; topFrame.receiveShadow = true;
+    topFrame.position.set(
+      0,
+      frameHeight / 2,
+      totalLength / 2 + frameThickness / 2,
+    );
+    topFrame.castShadow = true;
+    topFrame.receiveShadow = true;
     scene.add(topFrame);
 
     const bottomFrame = new THREE.Mesh(endFrameGeo, frameMat);
-    bottomFrame.position.set(0, frameHeight / 2, -totalLength / 2 - frameThickness / 2);
-    bottomFrame.castShadow = true; bottomFrame.receiveShadow = true;
+    bottomFrame.position.set(
+      0,
+      frameHeight / 2,
+      -totalLength / 2 - frameThickness / 2,
+    );
+    bottomFrame.castShadow = true;
+    bottomFrame.receiveShadow = true;
     scene.add(bottomFrame);
 
-    this._buildRailDiamonds(scene, totalWidth, totalLength, frameHeight, frameThickness);
+    this._buildRailDiamonds(
+      scene,
+      totalWidth,
+      totalLength,
+      frameHeight,
+      frameThickness,
+    );
   }
 
-  _buildRailDiamonds(scene, totalWidth, totalLength, frameHeight, frameThickness) {
-    const diamondGeo = new THREE.SphereGeometry(0.005, 8, 8); 
-    const diamondMat = new THREE.MeshStandardMaterial({ color: 0xdcdcdc, roughness: 0.2, metalness: 0.5 });
+  _buildRailDiamonds(
+    scene,
+    totalWidth,
+    totalLength,
+    frameHeight,
+    frameThickness,
+  ) {
+    const diamondGeo = new THREE.SphereGeometry(0.005, 8, 8);
+    const diamondMat = new THREE.MeshStandardMaterial({
+      color: 0xdcdcdc,
+      roughness: 0.2,
+      metalness: 0.5,
+    });
 
-    const zOffsets = [totalLength * 0.375, totalLength * 0.125, -totalLength * 0.125, -totalLength * 0.375];
-    zOffsets.forEach(z => {
-      [-1, 1].forEach(side => {
+    const zOffsets = [
+      totalLength * 0.375,
+      totalLength * 0.125,
+      -totalLength * 0.125,
+      -totalLength * 0.375,
+    ];
+    zOffsets.forEach((z) => {
+      [-1, 1].forEach((side) => {
         const dMesh = new THREE.Mesh(diamondGeo, diamondMat);
-        dMesh.position.set(side * (totalWidth / 2 + frameThickness / 2), frameHeight + 0.001, z);
+        dMesh.position.set(
+          side * (totalWidth / 2 + frameThickness / 2),
+          frameHeight + 0.001,
+          z,
+        );
         scene.add(dMesh);
       });
     });
 
     const xOffsets = [totalWidth * 0.25, -totalWidth * 0.25];
-    xOffsets.forEach(x => {
-      [-1, 1].forEach(side => {
+    xOffsets.forEach((x) => {
+      [-1, 1].forEach((side) => {
         const dMesh = new THREE.Mesh(diamondGeo, diamondMat);
-        dMesh.position.set(x, frameHeight + 0.001, side * (totalLength / 2 + frameThickness / 2));
+        dMesh.position.set(
+          x,
+          frameHeight + 0.001,
+          side * (totalLength / 2 + frameThickness / 2),
+        );
         scene.add(dMesh);
       });
     });
@@ -221,81 +281,101 @@ export class Table {
 
   _buildPocketVisuals(scene) {
     const { hw, hl } = this.layout;
-    
-    // ✨ السر هنا: حساب زوايا دقيقة لكل حفرة لحتى المعدن يغطي الخشب بس ويترك القماش مكشوف
+
     const pockets = [
-      { x: -hw, z: -hl, start: 0,              len: Math.PI * 1.5 }, // زاوية علوية يسار
-      { x:  hw, z: -hl, start: Math.PI * 1.5,  len: Math.PI * 1.5 }, // زاوية علوية يمين
-      { x: -hw, z:  0,  start: Math.PI * 0.5,  len: Math.PI       }, // وسط يسار
-      { x:  hw, z:  0,  start: Math.PI * 1.5,  len: Math.PI       }, // وسط يمين
-      { x: -hw, z:  hl, start: Math.PI * 0.5,  len: Math.PI * 1.5 }, // زاوية سفلية يسار
-      { x:  hw, z:  hl, start: Math.PI,        len: Math.PI * 1.5 }, // زاوية سفلية يمين
+      { x: -hw, z: -hl, start: 0, len: Math.PI * 1.5 },
+      { x: hw, z: -hl, start: Math.PI * 1.5, len: Math.PI * 1.5 },
+      { x: -hw, z: 0, start: Math.PI * 0.5, len: Math.PI },
+      { x: hw, z: 0, start: Math.PI * 1.5, len: Math.PI },
+      { x: -hw, z: hl, start: Math.PI * 0.5, len: Math.PI * 1.5 },
+      { x: hw, z: hl, start: Math.PI, len: Math.PI * 1.5 },
     ];
-    
+
     const pocketRadius = 0.065;
     const frameHeight = 0.055;
-    
-    // مادة معدنية مطفية (Matte Black/Gunmetal) فخمة جداً متل الواقع
-    const castingMat = new THREE.MeshStandardMaterial({ 
-      color: 0x151515, 
-      roughness: 0.2, 
-      metalness: 0.8 
+
+    const castingMat = new THREE.MeshStandardMaterial({
+      color: 0x151515,
+      roughness: 0.2,
+      metalness: 0.8,
     });
-    
-    // مادة سوداء مزدوجة لتبطين الحفرة من الداخل وإخفاء الخشب
-    const holeMat = new THREE.MeshStandardMaterial({ 
-      color: 0x020202, 
+
+    const holeMat = new THREE.MeshStandardMaterial({
+      color: 0x020202,
       roughness: 1.0,
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
     });
 
     pockets.forEach((p) => {
-      // 1. غطاء الجيب المعدني الممسوح (Pocket Casting)
-      // حلقة غير مكتملة، مستواها تماماً مع مستوى الخشب لتعطي واقعية بدون ما ترتفع
-      const rimGeo = new THREE.RingGeometry(pocketRadius, pocketRadius + 0.035, 32, 1, p.start, p.len);
+      const rimGeo = new THREE.RingGeometry(
+        pocketRadius,
+        pocketRadius + 0.035,
+        32,
+        1,
+        p.start,
+        p.len,
+      );
       const rim = new THREE.Mesh(rimGeo, castingMat);
       rim.rotation.x = -Math.PI / 2;
-      rim.position.set(p.x, frameHeight + 0.002, p.z); 
+      rim.position.set(p.x, frameHeight + 0.002, p.z);
       scene.add(rim);
 
-      // 2. بطانة الحفرة (Inner Liner)
-      // هاد الأسطوانة السوداء المفرغة بتنزل لتحت وبتخفي أي خشب ممكن يبين جوا الحفرة
-      // const linerGeo = new THREE.CylinderGeometry(pocketRadius - 0.001, pocketRadius - 0.001, 0.16, 24, 1, true);
-      // const liner = new THREE.Mesh(linerGeo, holeMat);
-      // liner.position.set(p.x, -0.02, p.z);
-      // scene.add(liner);
-
-      // 3. قعر الحفرة المظلم
-      const baseGeo = new THREE.CylinderGeometry(pocketRadius * 0.9, pocketRadius * 0.6, 0.05, 24);
+      const baseGeo = new THREE.CylinderGeometry(
+        pocketRadius * 0.9,
+        pocketRadius * 0.6,
+        0.05,
+        24,
+      );
       const base = new THREE.Mesh(baseGeo, holeMat);
       base.position.set(p.x, -0.1, p.z);
       scene.add(base);
     });
-  }_buildCushionPhysics(physicsWorld) {
+  }
+
+  _buildCushionPhysics(physicsWorld) {
     const segments = buildCushionSegments(this.layout);
     segments.forEach((seg) => physicsWorld.addCushionSegment(seg.a, seg.b));
 
     const margin = 0.15;
     const hw = this.width / 2 + margin;
     const hl = this.length / 2 + margin;
-    physicsWorld.addCushionSegment(new THREE.Vector3(hw, 0, -hl), new THREE.Vector3(hw, 0, hl));
-    physicsWorld.addCushionSegment(new THREE.Vector3(-hw, 0, -hl), new THREE.Vector3(-hw, 0, hl));
-    physicsWorld.addCushionSegment(new THREE.Vector3(-hw, 0, hl), new THREE.Vector3(hw, 0, hl));
-    physicsWorld.addCushionSegment(new THREE.Vector3(-hw, 0, -hl), new THREE.Vector3(hw, 0, -hl));
+    physicsWorld.addCushionSegment(
+      new THREE.Vector3(hw, 0, -hl),
+      new THREE.Vector3(hw, 0, hl),
+    );
+    physicsWorld.addCushionSegment(
+      new THREE.Vector3(-hw, 0, -hl),
+      new THREE.Vector3(-hw, 0, hl),
+    );
+    physicsWorld.addCushionSegment(
+      new THREE.Vector3(-hw, 0, hl),
+      new THREE.Vector3(hw, 0, hl),
+    );
+    physicsWorld.addCushionSegment(
+      new THREE.Vector3(-hw, 0, -hl),
+      new THREE.Vector3(hw, 0, -hl),
+    );
   }
 
   _buildPockets(physicsWorld) {
     const { hw, hl } = this.layout;
     const positions = [
-      { x: -hw, z: -hl }, { x: hw, z: -hl },
-      { x: -hw, z: 0 },   { x: hw, z: 0 },
-      { x: -hw, z: hl },  { x: hw, z: hl },
+      { x: -hw, z: -hl },
+      { x: hw, z: -hl },
+      { x: -hw, z: 0 },
+      { x: hw, z: 0 },
+      { x: -hw, z: hl },
+      { x: hw, z: hl },
     ];
     this.pockets = positions.map((p) => new PocketSensor(p));
   }
 
   isInsideBounds(pos, radius) {
-    return pos.x > this.bounds.minX + radius && pos.x < this.bounds.maxX - radius &&
-           pos.z > this.bounds.minZ + radius && pos.z < this.bounds.maxZ - radius;
+    return (
+      pos.x > this.bounds.minX + radius &&
+      pos.x < this.bounds.maxX - radius &&
+      pos.z > this.bounds.minZ + radius &&
+      pos.z < this.bounds.maxZ - radius
+    );
   }
 }

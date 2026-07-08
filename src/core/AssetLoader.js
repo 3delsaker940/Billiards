@@ -1,5 +1,5 @@
-import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 export class AssetLoader {
   constructor(onProgress) {
@@ -9,7 +9,8 @@ export class AssetLoader {
     this.audioLoader = new THREE.AudioLoader(this.manager);
 
     if (onProgress) {
-      this.manager.onProgress = (url, loaded, total) => onProgress(loaded / total);
+      this.manager.onProgress = (url, loaded, total) =>
+        onProgress(loaded / total);
     }
   }
 

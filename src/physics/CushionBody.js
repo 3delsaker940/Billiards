@@ -1,6 +1,4 @@
-import * as THREE from 'three';
-
-/** يبني قائمة قطع مستقيمة تمثّل حواف الطاولة، بنفس فجوات الجيوب المستخدمة بالرسم */
+import * as THREE from "three";
 export function buildCushionSegments(layout) {
   const segments = [];
 
