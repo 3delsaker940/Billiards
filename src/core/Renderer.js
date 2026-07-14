@@ -1,10 +1,10 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 
 export function createRenderer(canvas) {
   const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: true,
-    powerPreference: 'high-performance',
+    powerPreference: "high-performance",
   });
 
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));

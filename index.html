@@ -1,43 +1,37 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="icon" href="data:,">
-  <title>3D 8-Ball Pool</title>
-  <link rel="stylesheet" href="/src/ui/style.css" />
-</head>
-<body>
-  <div id="app-root">
-    <!-- لوحة الرسم الخاصة بالـ 3D -->
-    <canvas id="webgl-canvas"></canvas>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>3D 8-Ball Pool</title>
+    <link rel="stylesheet" href="/src/ui/style.css" />
+  </head>
+  <body>
+    <div id="app-root">
+      <canvas id="webgl-canvas"></canvas>
 
-    <!-- واجهة المستخدم العلوية (HUD) -->
-    <div id="hud-layer">
-      <div id="turn-indicator"></div>
-      <div id="groups-panel"></div>
-      <div id="foul-banner" class="hidden"></div>
-      <div id="game-over-panel" class="hidden"></div>
+      <div id="hud-layer">
+        <div id="turn-indicator"></div>
+        <div id="groups-panel"></div>
+        <div id="foul-banner" class="hidden"></div>
+        <div id="game-over-panel" class="hidden"></div>
+      </div>
+
+      <div id="power-bar-container">
+        <div id="power-bar-fill"></div>
+      </div>
+
+      <div id="spin-selector-panel">
+        <canvas id="spin-selector-canvas" width="120" height="120"></canvas>
+      </div>
+
+      <div id="loading-screen">
+        <div id="loading-text">جارِ تحميل الطاولة...</div>
+        <div id="loading-bar"><div id="loading-bar-fill"></div></div>
+      </div>
     </div>
 
-    <!-- مؤشر قوة الضرب -->
-    <div id="power-bar-container">
-      <div id="power-bar-fill"></div>
-    </div>
-
-    <!-- لوحة التحكم بالدوران (Spin) -->
-    <div id="spin-selector-panel">
-      <canvas id="spin-selector-canvas" width="120" height="120"></canvas>
-    </div>
-
-    <!-- شاشة التحميل -->
-    <div id="loading-screen">
-      <div id="loading-text">جارِ تحميل الطاولة...</div>
-      <div id="loading-bar"><div id="loading-bar-fill"></div></div>
-    </div>
-  </div>
-
-  <!-- ⭐ لا داعي لأي مكتبة فيزياء خارجية بعد الآن — المحرك بالكامل جافاسكريبت -->
-  <script type="module" src="/src/main.js"></script>
-</body>
+    <script type="module" src="/src/main.js"></script>
+  </body>
 </html>

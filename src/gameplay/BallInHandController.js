@@ -13,7 +13,8 @@ export class BallInHandController {
     if (!hit) return;
     const pos = hit.point.clone();
     pos.y = 0.028575;
-    if (restrictedToKitchen && pos.z > this.table.headStringZ) pos.z = this.table.headStringZ;
+    if (restrictedToKitchen && pos.z > this.table.headStringZ)
+      pos.z = this.table.headStringZ;
     this.previewPosition = pos;
     this.isLegal = this.validatePosition(pos, otherBalls);
   }

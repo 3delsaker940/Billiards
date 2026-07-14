@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 
 export class InputManager {
   constructor(domElement) {
@@ -6,19 +6,19 @@ export class InputManager {
     this.mouseNDC = new THREE.Vector2(0, 0);
     this.leftDown = false;
 
-    domElement.addEventListener('mousemove', (e) => {
+    domElement.addEventListener("mousemove", (e) => {
       const rect = domElement.getBoundingClientRect();
       this.mouseNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouseNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     });
 
-    domElement.addEventListener('mousedown', (e) => {
+    domElement.addEventListener("mousedown", (e) => {
       if (e.button === 0) this.leftDown = true;
     });
-    domElement.addEventListener('mouseup', (e) => {
+    domElement.addEventListener("mouseup", (e) => {
       if (e.button === 0) this.leftDown = false;
     });
 
-    domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+    domElement.addEventListener("contextmenu", (e) => e.preventDefault());
   }
 }

@@ -1,5 +1,5 @@
-import * as THREE from 'three';
-import { createRenderer } from './Renderer.js';
+import * as THREE from "three";
+import { createRenderer } from "./Renderer.js";
 
 export class Engine {
   constructor(canvas) {
@@ -7,7 +7,7 @@ export class Engine {
     this.clock = new THREE.Clock();
     this.updateCallbacks = [];
     this._running = false;
-    this._maxDelta = 1 / 30; // clamp huge tab-switch gaps so physics doesn't explode
+    this._maxDelta = 1 / 30;
   }
 
   onUpdate(callback) {

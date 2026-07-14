@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 
 export class PocketSensor {
   constructor(position, jawRadius = 0.075, dropRadius = 0.045) {
@@ -9,15 +9,14 @@ export class PocketSensor {
     this.restY = -0.12;
   }
 
-  /** @returns 'CAPTURED' | 'FALLING' | 'SETTLED' | null */
   update(ballBody, deltaTime) {
     const p = ballBody.position;
 
     if (ballBody.rigidBody.isFalling) {
-      ballBody.rigidBody.velocity.y -= 9.81 * deltaTime; // جاذبية حقيقية أثناء السقوط بالجيب
+      ballBody.rigidBody.velocity.y -= 9.81 * deltaTime;
       p.addScaledVector(ballBody.velocity, deltaTime);
-      if (p.y <= this.restY) return 'SETTLED';
-      return 'FALLING';
+      if (p.y <= this.restY) return "SETTLED";
+      return "FALLING";
     }
 
     const dx = p.x - this.position.x;
@@ -33,7 +32,7 @@ export class PocketSensor {
     if (dist < this.dropRadius) {
       ballBody.rigidBody.isFalling = true;
       ballBody.velocity.set(0, -0.3, 0);
-      return 'CAPTURED';
+      return "CAPTURED";
     }
     return null;
   }

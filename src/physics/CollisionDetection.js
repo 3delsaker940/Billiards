@@ -1,11 +1,5 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 
-/**
- * أقرب نقطة على قطعة مستقيمة (segment) من نقطة معطاة، بمستوى الطاولة الأفقي فقط (x,z)
- * — تجاهل الارتفاع (y) هون مقصود ومهم، لأنه حواف الطاولة مُعرّفة على y=0
- * بينما مركز الكرة دائماً على y = نصف القطر. لو ما تجاهلنا y، فرق الارتفاع
- * هاد وحده كان يشوّه حساب المسافة الحقيقية (وهو بالضبط سبب اختراق الكرات للحواف سابقاً).
- */
 export function closestPointOnSegment(point, segA, segB) {
   const p = new THREE.Vector3(point.x, 0, point.z);
   const a = new THREE.Vector3(segA.x, 0, segA.z);
@@ -18,13 +12,15 @@ export function closestPointOnSegment(point, segA, segB) {
   return a.addScaledVector(seg, t);
 }
 
-/**
- * وقت التصادم التحليلي بين كرتين متحركتين (حل معادلة تربيعية).
- * ⭐ إذا كانتا متداخلتين فعلياً الآن (c < 0)، نرجّع null — هذه الحالة
- * تُحل بخطوة منفصلة (resolveOverlaps) بدل ما تُعتبر "تصادم جديد" بكل خطوة،
- * وهذا بالضبط ما كان يسبب "التصاق" الكرات ببعض سابقاً.
- */
-export function sweptSphereSphereTime(posA, velA, radiusA, posB, velB, radiusB, maxT) {
+export function sweptSphereSphereTime(
+  posA,
+  velA,
+  radiusA,
+  posB,
+  velB,
+  radiusB,
+  maxT,
+) {
   const d0 = new THREE.Vector3().subVectors(posA, posB);
   const dv = new THREE.Vector3().subVectors(velA, velB);
   const R = radiusA + radiusB;
@@ -44,10 +40,6 @@ export function sweptSphereSphereTime(posA, velA, radiusA, posB, velB, radiusB, 
   return null;
 }
 
-/**
- * نفس المبدأ ضد حافة مستقيمة، لكن بمستوى (x,z) الأفقي فقط —
- * هذا يحل مشكلة الاختراق نهائياً لأنه ما عاد فرق الارتفاع يشوّه الحساب.
- */
 export function sweptSphereSegmentTime(pos, vel, radius, segA, segB, maxT) {
   const posXZ = new THREE.Vector3(pos.x, 0, pos.z);
   const velXZ = new THREE.Vector3(vel.x, 0, vel.z);
@@ -71,7 +63,7 @@ export function sweptSphereSegmentTime(pos, vel, radius, segA, segB, maxT) {
   const b = 2 * w0perp.dot(vPerp);
   const c = w0perp.dot(w0perp) - radius * radius;
 
-  if (c < 0) return null; // متداخلة فعلياً — تُحل بخطوة منفصلة
+  if (c < 0) return null;
   if (a < 1e-9) return null;
 
   const disc = b * b - 4 * a * c;
